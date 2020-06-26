@@ -1,0 +1,2 @@
+@php indexer.php
+@pause
