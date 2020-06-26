@@ -1,5 +1,6 @@
 <?php
 define("DRIVE_SEARCH_SUB_DIR","Anime");
+
 define("BEFORE_INDEX_QUERIES",
 "
 CREATE TABLE IF NOT EXISTS 'animelist' (
