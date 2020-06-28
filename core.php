@@ -1,9 +1,6 @@
 <?php
-	
-define('THUMBNAILS_DIR',__DIR__."/thumbnails");
-define('DEFAULT_PROXY', "socks5://192.168.1.2:9050");
-
 include  __DIR__."/NotORM/NotORM.php";
+include  __DIR__."/config.php";
 /* 
 CREATE TABLE "animelist" (
 	"id"	INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE,
@@ -185,12 +182,13 @@ function fetchByNameQuery($name,$path){
 					'synopsis'=>$data['jikanData']['synopsis'],
 					'added_time'=>date("Y-m-d H:i:s",filemtime($path)),
 					'genres'=>implode(', ',array_column($data['jikanData']['genres'],'name')),
+					'episodes'=>$data['jikanData']['episodes'],
 				];
 				
 				
 				$r=$db->animelist()->insert($insertData);
 				// dd($insertData);
-				echo " was insterted!\n";
+				echo " was added!\n";
 				//print_r($insertData);
 				
 			}

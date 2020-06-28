@@ -72,6 +72,7 @@ $list=$db->animelist()->order("$sort $order");
 							<div class="data-item ">Members: <span class="value"><?=number_format($a['members'])?></span></div>
 							<div class="data-item ">Popularity: <span class="value"><?=$a['popularity']?></span></div>
 							<div class="data-item ">ES-Score: <span class="value"><?=round($a['es_score'],2)?></span></div>
+							<div class="data-item ">Episodes: <span class="value"><?=$a['episodes']?></span></div>
 							<div class="data-item ">Added: <span class="value"><?=explode(' ',$a['added_time'])[0]?></span></div>
 							<div class="data-item ">Geners: <span class="value"><?=$a['genres']?></span></div>
 							<a class="data-item path" path="<?="$a[path]"?>" href="<?=str_replace("\\","/","explore://$a[path]")?>" ><?=$a['path']?></a>

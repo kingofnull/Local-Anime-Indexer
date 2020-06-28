@@ -1,6 +1,5 @@
 <?php
 include __DIR__."/core.php";    
-include __DIR__."/config.php";    
 
 // print_r(get("ifconfig.co/ip"));    
 	
@@ -36,6 +35,8 @@ foreach($fso->Drives as $drive) {
 				sleep(2);
             }
         }
+		echo "\n---------------------------\n";
+		
 
     }
 }
