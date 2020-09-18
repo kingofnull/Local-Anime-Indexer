@@ -1,6 +1,7 @@
 <?php
 include  __DIR__."/NotORM/NotORM.php";
 include  __DIR__."/config.php";
+
 /* 
 CREATE TABLE "animelist" (
 	"id"	INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE,
@@ -35,6 +36,35 @@ if(!function_exists('dd')){
 	}
 }	
 
+
+function curlPost($url, $data = NULL, $headers = []) {
+    $ch = curl_init($url);
+	curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/63.0.3239.132 Safari/537.36');
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+	curl_setopt($ch, CURLOPT_TIMEOUT, 5); //timeout in seconds
+	curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+	curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
+    curl_setopt($ch, CURLOPT_ENCODING, 'identity');
+
+	$headers[]='Referer: '.getReferer($url);
+	
+    if (!empty($data)) {
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+    }
+
+    if (!empty($headers)) {
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+    }
+
+    $response = curl_exec($ch);
+    if (curl_error($ch)) {
+        trigger_error('Curl Error:' . curl_error($ch));
+    }
+
+    curl_close($ch);
+    return $response;
+}
 
 function get($url,$params=null) {
 	$options = [
@@ -113,7 +143,7 @@ function getRelatedData($keyword){
 	*/
 		
 	
-	$response= get("https://myanimelist.net/search/prefix.json",[
+	/* $response= get("https://myanimelist.net/search/prefix.json",[
 			'type'=>'anime',
 			'keyword'=>$keyword,
 			'v'=>1
@@ -122,11 +152,24 @@ function getRelatedData($keyword){
 	if($response['errno']!=0){
 		echo "fetch failed! error: $response[errmsg]\n";
 		return null;
-	}
+	} 
+	
+	
 	$data=json_decode($response['content'],true);
 	$data= ($data['categories'][0]['items'][0]);
 	
-	$jikanLink="http://api.jikan.moe/v3/anime/{$data["id"]}";
+	if(!@$data["id"]){
+	   echo "fetch failed!\nResponse Dump:";
+		print_r($response);
+		echo "\n";
+	   return;
+	}
+	*/
+	
+	$malId=getMalIdByQuery($keyword);
+	$data=['id'=>$malId];
+	
+	$jikanLink= "http://api.jikan.moe/v3/anime/{$data["id"]}";
 	//echo "$jikanLink\n";
 	$jikanRes=get($jikanLink);
 	$jikanData=@json_decode($jikanRes['content'],true);
@@ -145,53 +188,149 @@ function getRelatedData($keyword){
 function fetchByNameQuery($name,$path){
 	Global $db;
 	echo str_pad (  "\t {$name} " , 50  ,".") ;
-			$data=getRelatedData($name);
+	// echo "`$path`\n";
+	$animeDataRow=$db->animelist("path = ?", $path)->fetch();
+	
+	if($animeDataRow && !UPDATE_EXISTING)
+	{
+		echo " already exists!\n";
+		return -1;
+	}
+	$data=getRelatedData($name);
+	
+	//dd(implode(' / ',$data['jikanData']['title_synonyms']));
+	// echo $data["id"]."\n";
+	if(!@$data["id"]){
+	   echo "fetch failed!\n";
+	  
+	   return -2;
+	}
+   
+	$tumbPath=THUMBNAILS_DIR."/{$data["id"]}.jpg";
+	if(!(file_exists($tumbPath) && filesize($tumbPath)>0)){
+		// $imageUrl=str_replace('/r/116x180','',$data["image_url"]);
+		$imageUrl=str_replace('/r/116x180','',$data['jikanData']['image_url']);
+		$imageData=get($imageUrl)['content'];
+		file_put_contents($tumbPath,$imageData);
+	}
+	
+	{
+		$rowData=[
+			'real_id'=>$data['id'],
+			// 'title'=>$data['name'],
+			'title'=>$data['jikanData']['title'],
+			// 'url'=>$data['url'],
+			'url'=>$data['jikanData']['url'],
+			// 'year'=>$data['payload']['start_year'],
+			'year'=>$data['jikanData']['aired']['prop']['from']['year'],
+			// 'score'=>$data['payload']['score'],
+			'score'=>$data['jikanData']['score'],
+			// 'es_score'=>$data['es_score'],
+			'es_score'=>null,
+			'path'=>$path,
 			
-			//dd(implode(' / ',$data['jikanData']['title_synonyms']));
-			// echo $data["id"]."\n";
-			if(!@$data["id"]){
-			   echo "fetch failed!\n";
-			   return;
-			}
-		   
-			$tumbPath=THUMBNAILS_DIR."/{$data["id"]}.jpg";
-			if(!(file_exists($tumbPath) && filesize($tumbPath)>0)){
-				$imageUrl=str_replace('/r/116x180','',$data["image_url"]);
-				$imageData=get($imageUrl)['content'];
-				file_put_contents($tumbPath,$imageData);
-			}
-			
-			
-			if($db->animelist("real_id = ?", $data["id"])->fetch()){
-				echo " already exists!\n";
-			}else{
-				$insertData=[
-					'real_id'=>$data['id'],
-					'title'=>$data['name'],
-					'url'=>$data['url'],
-					'year'=>$data['payload']['start_year'],
-					'score'=>$data['payload']['score'],
-					'es_score'=>$data['es_score'],
-					'path'=>$path,
-					
-					'sec_title'=>$data['jikanData']['title_english'],
-					'popularity'=>$data['jikanData']['popularity'],
-					'members'=>$data['jikanData']['members'],
-					'rank'=>$data['jikanData']['rank'],
-					'favorites'=>$data['jikanData']['favorites'],
-					'synopsis'=>$data['jikanData']['synopsis'],
-					'added_time'=>date("Y-m-d H:i:s",filemtime($path)),
-					'genres'=>implode(', ',array_column($data['jikanData']['genres'],'name')),
-					'episodes'=>$data['jikanData']['episodes'],
-				];
-				
-				
-				$r=$db->animelist()->insert($insertData);
-				// dd($insertData);
-				echo " was added!\n";
-				//print_r($insertData);
-				
-			}
+			'sec_title'=>$data['jikanData']['title_english'],
+			'popularity'=>$data['jikanData']['popularity'],
+			'members'=>$data['jikanData']['members'],
+			'rank'=>$data['jikanData']['rank'],
+			'favorites'=>$data['jikanData']['favorites'],
+			'synopsis'=>$data['jikanData']['synopsis'],
+			'added_time'=>date("Y-m-d H:i:s",filemtime($path)),
+			'genres'=>implode(', ',array_column($data['jikanData']['genres'],'name')),
+			'episodes'=>$data['jikanData']['episodes'],
+		];
+		
+		if($animeDataRow){
+			$animeDataRow->update($rowData);
+			echo " was updated!\n";
+		}else{
+			$r=$db->animelist()->insert($rowData);
+			echo " was inserted!\n";
+		}
+		
+		return 1;
+		
+		// dd($insertData);
+		
+		//print_r($insertData);
+		
+	}
 }
+
+
+
+function curlGet($url,$params=null,$userAgent="Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; .NET CLR 1.1.4322)",$proxy=null) {
+	$options = [
+		CURLOPT_RETURNTRANSFER => true, // return web page
+		CURLOPT_HEADER => false, // don't return headers
+		CURLOPT_FOLLOWLOCATION => true, // follow redirects
+		CURLOPT_ENCODING => "", // handle all encodings
+		CURLOPT_USERAGENT => $userAgent, // who am i
+		CURLOPT_AUTOREFERER => true, // set referer on redirect
+		CURLOPT_CONNECTTIMEOUT => 10, // timeout on connect
+		CURLOPT_TIMEOUT => 5, // timeout on response
+		CURLOPT_MAXREDIRS => 2, // stop after 10 redirects
+		CURLOPT_SSL_VERIFYPEER => false, // Disabled SSL Cert checks,
+
+		// CURLOPT_NOBODY			=>	true,
+		// CURLOPT_PROXYPORT => $proxyport,
+		// CURLOPT_PROXYTYPE => $prxTypeMap[$proxyProto], 
+	];
+
+	if(!empty($proxy)){
+		$options[CURLOPT_PROXY]=$proxy;
+	}
+	
+	if($params){
+		$url.='?' . http_build_query($params);
+	}
+	
+	$ch = curl_init($url);
+	curl_setopt_array($ch, $options);
+	$content = curl_exec($ch);
+	$err = curl_errno($ch);
+	$errmsg = curl_error($ch);
+	$info = curl_getinfo($ch); // Time spent downloading
+	curl_close($ch);
+
+	//print_r($info);
+
+	$time = $info['total_time_us'] - $info['namelookup_time_us'];
+
+	$response['time'] = (int)($time / 1000);
+	$response['errno'] = $err;
+	$response['errmsg'] = $errmsg;
+	$response['content'] = $content;
+
+	return $response;
+}
+
+
+function getGoogleFirstResultUrl($q){
+	$ie6UserAgent="Mozilla/4.0 (Windows; MSIE 6.0; Windows NT 5.2)";
+	
+	$q=urlencode($q);
+	$url="https://www.google.com/search?q=$q";
+	$res=curlGet($url,null,$ie6UserAgent);
+
+	preg_match('/href="\/url\?q=(?<url>[^&]+)&/', $res['content'], $match);
+
+	// Print the entire match result
+	return @($match['url']);	
+}
+
+function getMalIdByQuery($q)
+{
+	$q="$q anime site:myanimelist.net";
+	$url=(getGoogleFirstResultUrl($q));
+	
+	preg_match('/myanimelist\.net\/\w+\/(?<id>\d+)\//i', $url, $match);
+
+	// Print the entire match result
+	return @($match['id']);
+}
+
+
+
 
 

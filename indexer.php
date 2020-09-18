@@ -21,6 +21,7 @@ foreach( explode(";",BEFORE_INDEX_QUERIES) as $q) {
 	}
 }
 
+
 foreach($fso->Drives as $drive) {
     $drivePath = "{$drive->DriveLetter}:";
     $animeDir = "$drivePath\\".DRIVE_SEARCH_SUB_DIR;
@@ -31,8 +32,12 @@ foreach($fso->Drives as $drive) {
             $name=$fileinfo->getFilename();
             if (!$fileinfo->isDot() && !in_array(strtolower($name),["watched","fonts"])){
                 
-                fetchByNameQuery($name,"$animeDir\\$name");
-				sleep(2);
+                $r=fetchByNameQuery($name,"$animeDir\\$name");
+				if($r==1){
+					echo "Sleeping...\n";
+					sleep(2);
+				}
+				
             }
         }
 		echo "\n---------------------------\n";
