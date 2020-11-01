@@ -66,7 +66,7 @@ function curlPost($url, $data = NULL, $headers = []) {
     return $response;
 }
 
-function get($url,$params=null) {
+function get($url,$params=null,$proxy=DEFAULT_PROXY) {
 	$options = [
 		CURLOPT_RETURNTRANSFER => true, // return web page
 		CURLOPT_HEADER => false, // don't return headers
@@ -81,7 +81,7 @@ function get($url,$params=null) {
 
 		// CURLOPT_NOBODY			=>	true,
 
-		CURLOPT_PROXY => DEFAULT_PROXY,
+		CURLOPT_PROXY => $proxy,
 		// CURLOPT_PROXYPORT => $proxyport,
 		// CURLOPT_PROXYTYPE => $prxTypeMap[$proxyProto], 
 	];
@@ -169,11 +169,22 @@ function getRelatedData($keyword){
 	$malId=getMalIdByQuery($keyword);
 	$data=['id'=>$malId];
 	
-	$jikanLink= "http://api.jikan.moe/v3/anime/{$data["id"]}";
-	//echo "$jikanLink\n";
-	$jikanRes=get($jikanLink);
+	$jikanLink= "https://api.jikan.moe/v3/anime/{$malId}";
+	// echo "$jikanLink\n";
+	$jikanRes=get($jikanLink,null,null);
+	if(empty($jikanRes['content'])){
+		echo "jikan api empty response! errmsg: {$jikanRes['errmsg']}\n";
+		return null;
+	}
+	
 	$jikanData=@json_decode($jikanRes['content'],true);
-	if($jikanData['status']==404){
+	if(empty($jikanData)){
+		echo "jikan api parse response failed! content:{$jikanRes['content']}\n";
+		return null;
+	}
+	
+	
+	if( @$jikanData['status']==404){
 		
 		echo "jikan api fetch failed! error: {$jikanData['message']}\n";
 		return null;
@@ -196,17 +207,24 @@ function fetchByNameQuery($name,$path){
 		echo " already exists!\n";
 		return -1;
 	}
+	
 	$data=getRelatedData($name);
+	if(empty($data)){
+		echo " fetch failed!\n";
+		return;
+	}
 	
 	//dd(implode(' / ',$data['jikanData']['title_synonyms']));
 	// echo $data["id"]."\n";
-	if(!@$data["id"]){
-	   echo "fetch failed!\n";
+	$malId=@$data["id"];
+	
+	if(!$malId){
+	   echo "malId is empty failed!\n";
 	  
 	   return -2;
 	}
    
-	$tumbPath=THUMBNAILS_DIR."/{$data["id"]}.jpg";
+	$tumbPath=THUMBNAILS_DIR."/{$malId}.jpg";
 	if(!(file_exists($tumbPath) && filesize($tumbPath)>0)){
 		// $imageUrl=str_replace('/r/116x180','',$data["image_url"]);
 		$imageUrl=str_replace('/r/116x180','',$data['jikanData']['image_url']);
@@ -321,9 +339,12 @@ function getGoogleFirstResultUrl($q){
 
 function getMalIdByQuery($q)
 {
+	$q=preg_replace(["/(\-\s?\d+\s)?\[[^\]]+\]\.\w+/i"],"",$q);
+	$q=trim($q);
 	$q="$q anime site:myanimelist.net";
 	$url=(getGoogleFirstResultUrl($q));
-	
+	//dd($url);
+	// dd($q);
 	preg_match('/myanimelist\.net\/\w+\/(?<id>\d+)\//i', $url, $match);
 
 	// Print the entire match result
